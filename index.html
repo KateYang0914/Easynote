@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Easy Note</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <style>
+        :root {
+            --sidebar-w: 70px;
+            --bg: #f5f5f5;
+            --accent: #4a90e2;
+            --page: #67c23a;
+            --dark: #222;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: sans-serif;
+            background: var(--bg);
+            /* 防止手機瀏覽器預設的下拉重新整理等手勢干擾拖曳 */
+            touch-action: none;
+        }
+
+        /* 額外加上這段，確保畫布內的文字區還是可以滾動 */
+        #canvas {
+            touch-action: auto;
+        }
+
+        .app {
+            display: flex;
+            height: 100vh;
+        }
+
+        #side {
+            width: var(--sidebar-w);
+            background: #fff;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+            z-index: 100;
+        }
+
+        .btn {
+            width: 45px;
+            height: 45px;
+            margin-bottom: 15px;
+            border-radius: 12px;
+            border: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 22px;
+            transition: 0.2s;
+        }
+
+        .btn:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        #nav-path {
+            position: absolute;
+            top: 15px;
+            left: 85px;
+            z-index: 50;
+            background: white;
+            padding: 8px 18px;
+            border-radius: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+        }
+
+        .path-item {
+            color: var(--accent);
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .path-sep {
+            color: #ccc;
+            margin: 0 5px;
+        }
+
+        #canvas {
+            flex-grow: 1;
+            position: relative;
+            overflow: auto;
+            background-image: radial-gradient(#d1d1d1 1.2px, transparent 1.2px);
+            background-size: 30px 30px;
+        }
+
+        .card {
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            border: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 100px;
+            min-height: 100px;
+        }
+
+        .handle {
+            height: 20px;
+            /* 從 20px 調大到 35px，手機才好抓 */
+            cursor: grab;
+            background: var(--accent);
+            position: relative;
+            /* 關鍵：防止手機長按把手時彈出系統選單，並優化觸控 */
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .del {
+            position: absolute;
+            right: 6px;
+            top: 0;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .note-card .body {
+            flex-grow: 1;
+            padding: 15px;
+            outline: none;
+            font-size: 16px;
+            overflow-y: auto;
+            line-height: 1.5;
+            /* 關鍵：允許手機長按選字，並恢復預設手勢 */
+            touch-action: auto;
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
+        .page-card {
+            border: 2px solid var(--page);
+        }
+
+        .page-card .handle {
+            background: var(--page);
+        }
+
+        .page-link {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .image-container {
+            flex-grow: 1;
+            overflow: hidden;
+            background: #eee;
+            cursor: pointer;
+            display: flex;
+        }
+
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+        }
+
+        /* 修改這段，確保選取不會被干擾 */
+        .page-input {
+            user-select: text !important;
+            -webkit-user-select: text !important;
+            pointer-events: auto !important;
+            /* 關鍵：讓標題區也能正常觸發手機選字 */
+            touch-action: auto;
+        }
+
+        /* 增加這一行：防止外層容器搶走選取權 */
+        .page-link {
+            user-select: none;
+        }
+
+        /* 裁切彈窗 */
+        #crop-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .crop-area {
+            width: 80%;
+            height: 70%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .crop-area img {
+            max-width: 100%;
+        }
+
+        .crop-btns {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .c-btn {
+            padding: 10px 30px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* 文字工具列 */
+        #toolbar {
+            position: absolute;
+            display: none;
+            background: #222;
+            padding: 6px;
+            border-radius: 8px;
+            z-index: 2000;
+            gap: 8px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            align-items: center;
+        }
+
+        #toolbar button {
+            background: transparent;
+            color: white;
+            border: none;
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 14px;
+        }
+
+        #toolbar select {
+            background: transparent;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        #toolbar select option {
+            color: #000;
+        }
+
+
+        /* 存檔中的旋轉動畫 */
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .saving {
+            animation: spin 1s linear infinite;
+            pointer-events: none;
+            /* 存檔中禁止重複點擊 */
+            opacity: 0.6;
+        }
+
+        .drag-btn {
+            position: absolute;
+            right: 5px;
+            bottom: 5px;
+            width: 30px;
+            height: 30px;
+            background: var(--accent);
+            color: white;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            font-size: 18px;
+            z-index: 10;
+            opacity: 0.3;
+            /* 平時半透明，不擋住內容 */
+            transition: opacity 0.2s;
+            /* 關鍵：禁止按鈕文字被選取 */
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        /* 當滑鼠移入卡片，或是觸碰時，按鈕變亮 */
+        .card:hover .drag-btn {
+            opacity: 1;
+        }
+
+        /* 針對手機版直接讓它亮起來，方便點選 */
+        @media (max-width: 768px) {
+            .drag-btn {
+                opacity: 0.8;
+                width: 35px;
+                /* 手機版稍微放大一點好點擊 */
+                height: 35px;
+            }
+        }
+
+        /* 設定縮放按鈕的樣子 */
+        .resizer {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 25px;
+            height: 25px;
+            background: rgba(0, 0, 0, 0.1);
+            /* 平時淡淡的灰色 */
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: nwse-resize;
+            /* 滑鼠移上去顯示縮放圖示 */
+            z-index: 10;
+            font-size: 12px;
+            border-radius: 4px 0 0 0;
+            /* 左上角圓角 */
+            touch-action: none;
+            /* 關鍵：防止縮放時手機畫面跟著滾動 */
+        }
+
+        /* 當滑鼠移入卡片時，縮放鈕變明顯一點 */
+        .card:hover .resizer {
+            background: #ddd;
+            color: #333;
+        }
+
+        /* ✨ 針對手機版 (螢幕寬度小於 768px) 的特別優化 */
+        @media (max-width: 768px) {
+            .resizer {
+                width: 40px;
+                /* 手機版加大到 40px，手指才好點 */
+                height: 40px;
+                background: #eee;
+                font-size: 18px;
+                /* 符號也變大 */
+                opacity: 0.8;
+                /* 讓它一直都看得到，不用等 hover */
+                border: 1px solid #ccc;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="toolbar">
+        <button
+            onmousedown="event.preventDefault(); document.execCommand('bold', false, null); save();"><b>B</b></button>
+        <button
+            onmousedown="event.preventDefault(); document.execCommand('italic', false, null); save();"><i>I</i></button>
+        <select onchange="changeSize(this.value); this.selectedIndex=0; save();">
+            <option value="" disabled selected>大小</option>
+            <option value="16px">標準</option>
+            <option value="24px">中</option>
+            <option value="36px">大</option>
+        </select>
+        <button
+            onmousedown="event.preventDefault(); document.execCommand('justifyLeft', false, null); save();">⬅️</button>
+        <button
+            onmousedown="event.preventDefault(); document.execCommand('justifyCenter', false, null); save();">⬆️</button>
+        <button
+            onmousedown="event.preventDefault(); document.execCommand('justifyRight', false, null); save();">➡️</button>
+    </div>
+
+    <div id="nav-path"></div>
+    <div class="app">
+        <div id="side">
+            <div class="btn" onclick="addItem('note')" title="新增筆記">📝</div>
+            <div class="btn" onclick="document.getElementById('img-up').click()" title="新增圖片">🖼️</div>
+            <div class="btn" onclick="addItem('page')" title="新增子頁面">📂</div>
+            <div class="btn" onclick="exportData()" title="下載備份">📥</div>
+            <div class="btn" onclick="document.getElementById('file-in').click()" title="還原備份">📤</div>
+            <div class="btn" onclick="clearFullPage()" title="清空本頁所有內容">🗑️</div>
+            <div class="btn" onmousedown="event.preventDefault(); triggerUndo();" title="復原 (Ctrl+Z)">↩️</div>
+            <div class="btn" onmousedown="event.preventDefault(); triggerRedo();" title="重做 (Ctrl+Y)">↪️</div>
+            <div class="btn" id="save-btn" onclick="manualSave()" title="手動同步雲端">☁️</div>
+            <div class="btn" onclick="handleLogout()" title="登出">🚪</div>
+            <input type="file" id="img-up" accept="image/*" hidden onchange="handleImg(event)">
+            <input type="file" id="file-in" hidden onchange="importData(event)">
+        </div>
+        <div id="canvas"></div>
+    </div>
+
+    <div id="crop-modal">
+        <div class="crop-area"><img id="crop-img"></div>
+        <div class="crop-btns">
+            <button class="c-btn" style="background:#666; color:white;" onclick="closeCrop()">取消</button>
+            <button class="c-btn" style="background:#67c23a; color:white;" onclick="doCrop()">套用裁切</button>
+        </div>
+
+
+
+
+
+
+    </div>
+
+    <template id="card-template">
+        <div class="card">
+            <div class="handle">
+                <span class="del">✕</span>
+            </div>
+            <div class="resizer">◢</div>
+        </div>
+    </template>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-logic.js"></script>
+    <script src="site.js"></script>
+    <script>
+        // 實作登出邏輯
+        async function handleLogout() {
+            if (!confirm("確定要登出嗎？")) return;
+            try {
+                // sbClient 定義於 supabase-logic.js
+                const { error } = await sbClient.auth.signOut();
+                if (error) throw error;
+                // 登出成功後跳轉回登入頁面
+                window.location.href = 'login.html';
+            } catch (err) {
+                alert("登出失敗：" + err.message);
+            }
+        }
+    </script>
+</body>
+
+</html>

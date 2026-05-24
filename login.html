@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <!-- 加入 CSP 標籤以允許連線到 Supabase 與載入外部 SDK -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline';
+        connect-src 'self' https://rzrhjpmxmxkrdtwxxhbb.supabase.co wss://rzrhjpmxmxkrdtwxxhbb.supabase.co https://cdn.jsdelivr.net;
+        img-src 'self' data: https://rzrhjpmxmxkrdtwxxhbb.supabase.co;
+        style-src 'self' 'unsafe-inline';
+    ">
+    <title>登入 Easy Note</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f0f0; margin: 0; }
+        .login-card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 300px; }
+        h2 { margin-top: 0; text-align: center; color: #333; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #1d4ed8; }
+        #message { color: red; font-size: 14px; text-align: center; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h2>Easy Note Login</h2>
+        <input type="email" id="email" placeholder="電子郵件" required>
+        <input type="password" id="password" placeholder="密碼" required>
+        <button onclick="handleLogin()">登入</button>
+        <div id="message"></div>
+    </div>
+
+    <!-- 引入 Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 引入你的邏輯層 -->
+    <script src="supabase-logic.js"></script>
+    <script>
+        async function handleLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const msg = document.getElementById('message');
+
+            try {
+                msg.innerText = "登入中...";
+                const { data, error } = await sbClient.auth.signInWithPassword({
+                    email: email,
+                    password: password,
+                });
+
+                if (error) throw error;
+
+                console.log("登入成功:", data);
+                // 登入成功後跳轉回主頁面
+                window.location.href = 'index.html'; 
+            } catch (err) {
+                msg.innerText = "登入失敗：" + err.message;
+            }
+        }
+    </script>
+</body>
+</html>
